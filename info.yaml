@@ -3,7 +3,7 @@ project:
   title:        IHP VGA demo
   author:       algofoogle (Anton Maurovic)
   discord:      algofoogle
-  description:  Simple VGA demo for IHP tapeout
+  description:  Simple VGA demo for IHP tapeout (inc. Matt Venn's VGA clock)
   language:     Verilog
   clock_hz:     25_000_000
 

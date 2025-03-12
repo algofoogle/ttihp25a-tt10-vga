@@ -11,13 +11,16 @@ You can also include images in this folder and reference them in the markdown. E
 
 Typical Verilog design that generates VGA timing and RGB222 colour outputs compatible with the Tiny VGA PMOD.
 
+It produces a bouncing ball animation over the top of an adaptation of Matt Venn's VGA clock, from here: https://github.com/mattvenn/tt08-vga-clock
+
 
 ## How to test
 
 *   Plug in a VGA monitor via Tiny VGA PMOD.
-*   Set `mode` input to 0 for 640x480 60Hz from a 25.175MHz clock, or to 1 for 1440x900 60Hz from a 26.6175 MHz clock.
-*   Supply your clock.
+*   Set `mode` input to 0, i.e. specifying 640x480 60Hz from a 25.175MHz clock.
+*   Supply a 25MHz clock.
 *   Assert reset.
+*   Pulse or hold the `adj_*` inputs to adjust hours, minutes, or seconds.
 
 
 ## External hardware
