@@ -161,6 +161,7 @@ module tt_um_algofoogle_vga (
   localparam `RGB zenith        = 6'b00_01_11; // Light blue.
   localparam `RGB sky           = 6'b01_10_11; // Bright blue.
   localparam `RGB grass         = 6'b01_10_00; // Lively green.
+  localparam `RGB bright_grass  = 6'b01_11_00; // Bright green.
   localparam `RGB dark_grass1   = 6'b00_10_00; // Dark green.
   localparam `RGB dark_grass2   = 6'b00_01_00; // Darker green.
   localparam `RGB dirt_shadow   = 6'b01_00_00; // Dark brown.
@@ -203,16 +204,17 @@ module tt_um_algofoogle_vga (
   );
 
   wire in_clock       = clock_rgb != 0;
+  wire frizz          = ((h[1:0]^v[1:0]) != v[3:2]);
 
   wire `RGB rgb =
     in_dirt         ? dirt :
     in_dirt_shadow  ? dirt_shadow :
-    in_dark_grass   ? (((h[1:0]^v[1:0]) != v[3:2]) ? dark_grass1 : dark_grass2) :
-    in_grass        ? grass :
+    in_dark_grass   ? (frizz ? dark_grass1 : dark_grass2) :
+    in_grass        ? (frizz ? grass : bright_grass) :
     in_player_heart ? player_heart :
     in_player_ring  ? player_ring :
     in_clock        ? clock_rgb :
-    in_clouds       ? ( ((h[1:0]^v[1:0]) == v[3:2] && (h[2]^v[2] || (v[5]==0)) || ((v[6:2]==0) && (h[0]^v[0]))) ? zenith : sky) :
+    in_clouds       ? ( ( (!frizz) && (h[2]^v[2] || (v[5]==0)) || ((v[6:2]==0) && (h[0]^v[0]))) ? zenith : sky) :
                       sky;
 
   assign {rr,gg,bb} = rgb;

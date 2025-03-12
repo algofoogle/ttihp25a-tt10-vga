@@ -66,7 +66,6 @@ module vga_clock #(
             hrs_d <= 0;
             sec_counter <= 0;
             color_offset <= 0;
-            col_index_q <= 0;
         end else begin
             if(sec_u == 10) begin
                 sec_u <= 0;
