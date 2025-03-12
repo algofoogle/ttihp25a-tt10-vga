@@ -18,6 +18,8 @@ It produces a bouncing ball animation over the top of an adaptation of Matt Venn
 
 *   Plug in a VGA monitor via Tiny VGA PMOD.
 *   Set `mode` input to 0, i.e. specifying 640x480 60Hz from a 25MHz clock.
+*   Set `show_clock` input to 1.
+*   Set `pmod_select` input to 0 for Tiny VGA PMOD. Otherwise, 1=Matt's VGA Clock PMOD.
 *   Supply a 25MHz clock (clock's actual seconds timer assumes exactly 25.000MHz).
 *   Assert reset.
 *   Pulse or hold the `adj_*` inputs to adjust hours, minutes, or seconds.

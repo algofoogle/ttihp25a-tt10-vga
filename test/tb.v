@@ -46,7 +46,17 @@ module tb ();
 
   // Specific inputs for this design:
   reg mode;
+  reg adj_hrs;
+  reg adj_min;
+  reg adj_sec;
+  reg show_clock;
+  reg pmod_select;
   assign ui_in[7] = mode;
+  assign ui_in[4] = show_clock;
+  assign ui_in[3] = pmod_select;
+  assign ui_in[2] = adj_hrs;
+  assign ui_in[1] = adj_min;
+  assign ui_in[0] = adj_sec;
 
   // Replace tt_um_example with your module name:
   tt_um_algofoogle_vga user_project (

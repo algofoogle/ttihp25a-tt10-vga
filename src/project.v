@@ -33,10 +33,12 @@ module tt_um_algofoogle_vga (
   localparam kInitialVelY   = 21;
 
   wire reset = ~rst_n;
-  wire video_timing_mode = ui_in[7];
-  wire clock_adj_hrs = ui_in[0];
-  wire clock_adj_min = ui_in[1];
-  wire clock_adj_sec = ui_in[2];
+  wire clock_adj_hrs        = ui_in[0];
+  wire clock_adj_min        = ui_in[1];
+  wire clock_adj_sec        = ui_in[2];
+  wire pmod_select          = ui_in[3]; // 0=Tiny VGA, 1=Matt's VGA Clock.
+  wire show_clock           = ui_in[4];
+  wire video_timing_mode    = ui_in[7];
   wire hsync;
   wire vsync;
   wire [1:0] rr,gg,bb;
@@ -46,12 +48,9 @@ module tt_um_algofoogle_vga (
   wire visible; // Whether the display is in the visible region, or blanking region.
 
   // Tiny VGA PMOD wiring, with 'visible' used for blanking:
-  assign uo_out = {
-    hsync,
-    {3{visible}} & {bb[0], gg[0], rr[0]},
-    vsync,
-    {3{visible}} & {bb[1], gg[1], rr[1]}
-  };
+  assign uo_out =
+    pmod_select ? {rr, gg, bb, vsync, hsync} :
+                  {hsync, {3{visible}} & {bb[0], gg[0], rr[0]}, vsync, {3{visible}} & {bb[1], gg[1], rr[1]}};
 
   assign uio_out = {
     3'b000, // Unused.
@@ -145,18 +144,7 @@ module tt_um_algofoogle_vga (
       end
 
     end
-    // end else if (pym < 0) begin
-    //   pym <= 0;
-    //   ydelta <= 20;
-    // end
   end
-
-  // // Y position control:
-  // always @(posedge clk) begin
-  //   if (reset) begin
-  //     py <= 0;
-  //   end
-  // end
 
   localparam `RGB zenith        = 6'b00_01_11; // Light blue.
   localparam `RGB sky           = 6'b01_10_11; // Bright blue.
@@ -191,19 +179,47 @@ module tt_um_algofoogle_vga (
 
   wire `RGB clock_rgb;
 
-  vga_clock matt_venn_vga_clock (
-    .clk      (clk),
-    .reset_n  (rst_n),
-    .adj_hrs  (clock_adj_hrs),
-    .adj_min  (clock_adj_min),
-    .adj_sec  (clock_adj_sec),
-    .x_px     (h),   // X position for actual pixel.
-    .y_px     (v),   // Y position for actual pixel.
-    .activevideo(visible),
-    .rrggbb   (clock_rgb)
+  wire [3:0] clock_sec_u;
+  wire [2:0] clock_sec_d;
+  wire [3:0] clock_min_u;
+  wire [2:0] clock_min_d;
+  wire [3:0] clock_hrs_u;
+  wire [1:0] clock_hrs_d;
+  wire [2:0] clock_color_offset;
+
+  clock_logic matt_venn_clock (
+    .clk          (clk),
+    .reset        (reset),
+    .adj_hrs      (clock_adj_hrs),
+    .adj_min      (clock_adj_min),
+    .adj_sec      (clock_adj_sec),
+    .but_clk_en   (frame_end),
+    .sec_u        (clock_sec_u),
+    .sec_d        (clock_sec_d),
+    .min_u        (clock_min_u),
+    .min_d        (clock_min_d),
+    .hrs_u        (clock_hrs_u),
+    .hrs_d        (clock_hrs_d),
+    .color_offset (clock_color_offset)
   );
 
-  wire in_clock       = clock_rgb != 0;
+  vga_clock_gen matt_venn_vga (
+    .clk          (clk),
+    .reset        (reset),
+    .x_px         (h),   // X position for actual pixel.
+    .y_px         (v),   // Y position for actual pixel.
+    .activevideo  (visible),
+    .sec_u        (clock_sec_u),
+    .sec_d        (clock_sec_d),
+    .min_u        (clock_min_u),
+    .min_d        (clock_min_d),
+    .hrs_u        (clock_hrs_u),
+    .hrs_d        (clock_hrs_d),
+    .color_offset (clock_color_offset),
+    .rrggbb       (clock_rgb)
+  );
+
+  wire in_clock       = show_clock && (clock_rgb != 0);
   wire frizz          = ((h[1:0]^v[1:0]) != v[3:2]);
 
   wire `RGB rgb =

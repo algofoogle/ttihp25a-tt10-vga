@@ -1,62 +1,30 @@
-// VGA clock by Matt Venn:
+// Adapted from Matt Venn's VGA clock:
 // https://github.com/mattvenn/tt08-vga-clock/blob/main/src/vga_clock.v
-// ...with minor adaptations.
 
 `default_nettype none
-module vga_clock #(
+
+module clock_logic #(
     parameter CORE_CLOCK = 25_000_000
 ) (
-    input wire clk, 
-    input wire reset_n,
+    input wire clk,
+    input wire reset,
     input wire adj_hrs,
     input wire adj_min,
     input wire adj_sec,
-    input [9:0] x_px,   // X position for actual pixel.
-    input [9:0] y_px,   // Y position for actual pixel.
-    input activevideo,
-    output wire [5:0] rrggbb
+    input wire but_clk_en,  // Pulses (e.g. on frame end) to throttle button update rate.
+    output reg [3:0] sec_u,
+    output reg [2:0] sec_d,
+    output reg [3:0] min_u,
+    output reg [2:0] min_d,
+    output reg [3:0] hrs_u,
+    output reg [1:0] hrs_d,
+    output reg [2:0] color_offset // Used to cycle through colour ramp, as 'minutes' increments.
 );
-
-    wire reset = !reset_n;
-
-    reg [3:0] sec_u;
-    reg [2:0] sec_d;
-    reg [3:0] min_u;
-    reg [2:0] min_d;
-    reg [3:0] hrs_u;
-    reg [1:0] hrs_d;
     reg [24:0] sec_counter; // Enough to hold CORE_CLOCK counts.
 
     wire adj_sec_pulse, adj_min_pulse, adj_hrs_pulse;
 
-    // want button_clk_en to be about 10ms
-    // frame rate is 70hz is 15ms
-    wire but_clk_en = y_px == 0 && x_px == 0;
-
-
-    // these units are expressed in blocks
-    localparam OFFSET_Y_BLK = 0;
-    localparam OFFSET_X_BLK = 1;
-    localparam NUM_CHARS = 8;
-    localparam FONT_W = 4;
-    localparam FONT_H = 5;
-    localparam COLON = 10;
-    localparam BLANK = 11;
-    localparam COL_INDEX_W = $clog2(FONT_W);
-
-    wire [FONT_W-1:0] font_out;
-    wire [5:0] font_addr;
-    wire [5:0] digit_index;
-    wire [5:0] color;
-    reg [3:0] color_offset;
-    wire [3:0] number;
-    wire [COL_INDEX_W-1:0] col_index;
-    reg [COL_INDEX_W-1:0] col_index_q;
-
-    wire px_clk;
-    assign px_clk = clk;
-
-    always @(posedge px_clk) begin
+    always @(posedge clk) begin
         if(reset) begin
             sec_u <= 0;
             sec_d <= 0;
@@ -116,12 +84,50 @@ module vga_clock #(
     localparam DEC_COUNT = 1;
     localparam MIN_COUNT = 2;
     button_pulse #(.MIN_COUNT(MIN_COUNT), .DEC_COUNT(DEC_COUNT), .MAX_COUNT(MAX_BUT_RATE)) 
-        pulse_sec (.clk(px_clk), .clk_en(but_clk_en), .button(adj_sec), .pulse(adj_sec_pulse), .reset(reset));
+        pulse_sec (.clk(clk), .clk_en(but_clk_en), .button(adj_sec), .pulse(adj_sec_pulse), .reset(reset));
     button_pulse #(.MIN_COUNT(MIN_COUNT), .DEC_COUNT(DEC_COUNT), .MAX_COUNT(MAX_BUT_RATE)) 
-        pulse_min (.clk(px_clk), .clk_en(but_clk_en), .button(adj_min), .pulse(adj_min_pulse), .reset(reset));
+        pulse_min (.clk(clk), .clk_en(but_clk_en), .button(adj_min), .pulse(adj_min_pulse), .reset(reset));
     button_pulse #(.MIN_COUNT(MIN_COUNT), .DEC_COUNT(DEC_COUNT), .MAX_COUNT(MAX_BUT_RATE)) 
-        pulse_hrs (.clk(px_clk), .clk_en(but_clk_en), .button(adj_hrs), .pulse(adj_hrs_pulse), .reset(reset));
+        pulse_hrs (.clk(clk), .clk_en(but_clk_en), .button(adj_hrs), .pulse(adj_hrs_pulse), .reset(reset));
 
+
+endmodule
+
+
+module vga_clock_gen (
+    input clk,
+    input reset,
+    input [9:0] x_px,   // X position for actual pixel.
+    input [9:0] y_px,   // Y position for actual pixel.
+    input activevideo,
+    input [3:0] sec_u,
+    input [2:0] sec_d,
+    input [3:0] min_u,
+    input [2:0] min_d,
+    input [3:0] hrs_u,
+    input [1:0] hrs_d,
+    input [2:0] color_offset, // Used to cycle through colour ramp, as 'minutes' increments.
+    output wire [5:0] rrggbb
+);
+    // these units are expressed in "blocks"
+    localparam OFFSET_Y_BLK = 0;
+    localparam OFFSET_X_BLK = 1;
+    localparam NUM_CHARS = 8;
+    localparam FONT_W = 4;
+    localparam FONT_H = 5;
+    localparam COLON = 10;
+    localparam BLANK = 11;
+    localparam COL_INDEX_W = $clog2(FONT_W);
+
+    wire [FONT_W-1:0] font_out;
+    wire [5:0] font_addr;
+    wire [5:0] digit_index;
+    wire [5:0] color;
+    wire [3:0] number;
+    wire [COL_INDEX_W-1:0] col_index;
+    reg [COL_INDEX_W-1:0] col_index_q;
+
+    wire px_clk = clk;
 
     // blocks are 16 x 16 px. total width = 8 * blocks of 4 =  512. 
     /* verilator lint_off WIDTH */
@@ -130,17 +136,8 @@ module vga_clock #(
     /* verilator lint_on WIDTH */
     reg [5:0] x_block_q;
     reg [5:0] y_block_q;
-   // reg [5:0] x_block = 0;
-   // reg [5:0] y_block = 0; 
 
     fontROM #(.data_width(FONT_W)) font_0 (.clk(px_clk), .addr(font_addr), .dout(font_out));
-
-    /*
-    initial begin
-        $display(FONT_W);
-        $display(COL_INDEX_W);
-    end
-    */
 
     digit #(.FONT_W(FONT_W), .FONT_H(FONT_H), .NUM_BLOCKS(NUM_CHARS*FONT_W)) digit_0 (.clk(px_clk), .x_block(x_block), .number(number), .digit_index(digit_index), .col_index(col_index), .color(color), .color_offset(color_offset));
 
@@ -225,9 +222,6 @@ endmodule
 
 
 module digit #(
-    // parameter DIGIT_INDEX_FILE  = "../src/digit_index.hex",
-    // parameter COL_INDEX_FILE    = "../src/col_index.hex",
-    // parameter COLOR_INDEX_FILE  = "../src/color.hex",
     parameter FONT_W = 3,
     parameter FONT_H = 5,
     parameter NUM_BLOCKS = 20
@@ -236,7 +230,7 @@ module digit #(
     input wire [5:0] x_block,
     // input wire [5:0] y_block,
     input wire [3:0] number,      // the number to display: [0->9: ]
-    input wire [3:0] color_offset, // shift through the colours
+    input wire [2:0] color_offset, // shift through the colours
     output reg [5:0] digit_index,
     output reg [5:0] color,
     output reg [$clog2(FONT_W)-1:0] col_index
@@ -244,20 +238,8 @@ module digit #(
 
     localparam COL_INDEX_W = $clog2(FONT_W); 
 
-    // reg [5:0] digit_index_mem [0:11];
-    // reg [COL_INDEX_W-1:0] col_index_mem [0:NUM_BLOCKS];
-    // reg [5:0] color_index_mem [0:7];
-
-    // initial begin
-        /* verilator lint_off WIDTH */
-        // if (DIGIT_INDEX_FILE) $readmemh(DIGIT_INDEX_FILE, digit_index_mem);
-        // if (COL_INDEX_FILE) $readmemh(COL_INDEX_FILE, col_index_mem);
-        // if (COLOR_INDEX_FILE) $readmemb(COLOR_INDEX_FILE, color_index_mem);
-        /* verilator lint_on WIDTH */
-    // end
-
     wire [3:0] char = x_block[5:2];
-    wire [4:0] color_hash = char + color_offset;
+    wire [4:0] color_hash = char + {1'd0, color_offset};
     always @(posedge clk) begin
         /* verilator lint_off WIDTH */
         case (number) // This is number*5:
@@ -275,9 +257,7 @@ module digit #(
             4'd11   : digit_index <= 6'h37;
             default : digit_index <= 0;
         endcase
-        // digit_index <= digit_index_mem[number];
         col_index <= x_block < NUM_BLOCKS ? x_block[1:0] : 3;
-        // col_index <= col_index_mem[x_block < NUM_BLOCKS ? x_block : NUM_BLOCKS-1];
         case (color_hash[2:0])
             3'd0    : color <= 6'b110000;
             3'd1    : color <= 6'b111000;
@@ -288,35 +268,15 @@ module digit #(
             3'd6    : color <= 6'b010010;
             3'd7    : color <= 6'b100001;
         endcase
-        // color <= color_index_mem[char + color_offset];
         /* verilator lint_on WIDTH */
     end
    
 endmodule
 
 
-//////////////////////////////////////////////////////////////////////////////////
-// Company: Ridotech
-// Engineer: Juan Manuel Rico
-//
-// Create Date: 21:30:38 26/04/2018
-// Module Name: fontROM
-//
-// Description: Font ROM for numbers (16x19 bits for numbers 0 to 9).
-//
-// Dependencies:
-//
-// Revision:
-// Revision 0.01 - File Created
-//
-// Additional Comments:
-//
-//-----------------------------------------------------------------------------
-//-- GPL license
-//-----------------------------------------------------------------------------
+// Font ROM for numbers 0-9, 4x5 pixels, but really only 3x5.
 module fontROM 
 #(
-    // parameter FONT_FILE = "../src/font.list",
     parameter addr_width = 6,
     parameter data_width = 4
 )
@@ -325,14 +285,6 @@ module fontROM
     input wire [addr_width-1:0] addr,
     output reg [data_width-1:0] dout
 );
-
-    // reg [data_width-1:0] mem [(1 << addr_width)-1:0];
-
-    // initial begin
-    //     /* verilator lint_off WIDTH */
-    //     if (FONT_FILE) $readmemb(FONT_FILE, mem);
-    //     /* verilator lint_on WIDTH */
-    // end
 
     always @(posedge clk)
         begin
@@ -399,7 +351,6 @@ module fontROM
                 6'd59   : dout <= 4'b0000;
                 default : dout <= 4'b1110;
             endcase
-            // dout <= mem[addr];
         end
 
 endmodule

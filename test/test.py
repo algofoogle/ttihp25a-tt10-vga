@@ -44,6 +44,11 @@ def check_uio_out(dut):
 def set_default_start_state(dut):
     dut.ena.value = 1
     dut.mode.value = 0 # Normal 640x480 60fps mode
+    dut.adj_hrs.value = 0
+    dut.adj_min.value = 0
+    dut.adj_sec.value = 0
+    dut.show_clock.value = 1
+    dut.pmod_select.value = 0 # Tiny VGA PMOD mode.
 
 @cocotb.test()
 async def test_frames(dut):
