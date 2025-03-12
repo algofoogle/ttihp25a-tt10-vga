@@ -123,7 +123,7 @@ module tt_um_algofoogle_vga (
 
       if (ydelta < 0 && pym[11:8]==0 && pym[7:0] <= {-ydelta}) begin
         pym <= 0;//pym - {{4{ydelta[7]}}, ydelta};
-        ydelta <= 19 + {6'd0,px[1:0]}; // Makes the next bounce height look a little random.
+        ydelta <= 17 + {5'd0,px[2:0]}; // Makes the next bounce height look a little random.
       end else begin
         pym <= pym + {{4{ydelta[7]}}, ydelta};
         ydelta <= ydelta - 1;
@@ -156,6 +156,7 @@ module tt_um_algofoogle_vga (
   localparam `RGB dirt          = 6'b10_01_00; // Medium brown.
   localparam `RGB player_heart  = 6'b11_00_00; // Bright red.
   localparam `RGB player_ring   = 6'b10_00_00; // Red.
+  localparam `RGB shadow        = 6'b00_00_00; // Black.
 
 
   wire signed [9:0] pxo = h-(kPlayerWidth/2)-px;
@@ -177,7 +178,7 @@ module tt_um_algofoogle_vga (
   wire in_dirt_shadow = (v >= kDirtShadow);
   wire in_clouds      = (v <  kClouds);
 
-  wire `RGB clock_rgb;
+  wire `RGB clock_rgb, clock_shadow_rgb;
 
   wire [3:0] clock_sec_u;
   wire [2:0] clock_sec_d;
@@ -219,7 +220,25 @@ module tt_um_algofoogle_vga (
     .rrggbb       (clock_rgb)
   );
 
+  // Used for creating a shadow under clock digits:
+  vga_clock_gen matt_venn_vga_shadow (
+    .clk          (clk),
+    .reset        (reset),
+    .x_px         (h-4),   // X position for actual pixel, offset by 16 for shadow.
+    .y_px         (v-4),   // Y position for actual pixel, offset by 16 for shadow.
+    .activevideo  (visible),
+    .sec_u        (clock_sec_u),
+    .sec_d        (clock_sec_d),
+    .min_u        (clock_min_u),
+    .min_d        (clock_min_d),
+    .hrs_u        (clock_hrs_u),
+    .hrs_d        (clock_hrs_d),
+    .color_offset (clock_color_offset),
+    .rrggbb       (clock_shadow_rgb)
+  );
+
   wire in_clock       = show_clock && (clock_rgb != 0);
+  wire in_clock_shade = show_clock && (clock_shadow_rgb != 0);
   wire frizz          = ((h[1:0]^v[1:0]) != v[3:2]);
 
   wire `RGB rgb =
@@ -230,6 +249,7 @@ module tt_um_algofoogle_vga (
     in_player_heart ? player_heart :
     in_player_ring  ? player_ring :
     in_clock        ? clock_rgb :
+    in_clock_shade  ? shadow :
     in_clouds       ? ( ( (!frizz) && (h[2]^v[2] || (v[5]==0)) || ((v[6:2]==0) && (h[0]^v[0]))) ? zenith : sky) :
                       sky;
 
