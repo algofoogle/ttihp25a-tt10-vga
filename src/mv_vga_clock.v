@@ -228,7 +228,7 @@ endmodule
 module digit #(
     // parameter DIGIT_INDEX_FILE  = "../src/digit_index.hex",
     // parameter COL_INDEX_FILE    = "../src/col_index.hex",
-    parameter COLOR_INDEX_FILE  = "../src/color.hex",
+    // parameter COLOR_INDEX_FILE  = "../src/color.hex",
     parameter FONT_W = 3,
     parameter FONT_H = 5,
     parameter NUM_BLOCKS = 20
@@ -247,15 +247,15 @@ module digit #(
 
     // reg [5:0] digit_index_mem [0:11];
     // reg [COL_INDEX_W-1:0] col_index_mem [0:NUM_BLOCKS];
-    reg [5:0] color_index_mem [0:7];
+    // reg [5:0] color_index_mem [0:7];
 
-    initial begin
+    // initial begin
         /* verilator lint_off WIDTH */
         // if (DIGIT_INDEX_FILE) $readmemh(DIGIT_INDEX_FILE, digit_index_mem);
         // if (COL_INDEX_FILE) $readmemh(COL_INDEX_FILE, col_index_mem);
-        if (COLOR_INDEX_FILE) $readmemb(COLOR_INDEX_FILE, color_index_mem);
+        // if (COLOR_INDEX_FILE) $readmemb(COLOR_INDEX_FILE, color_index_mem);
         /* verilator lint_on WIDTH */
-    end
+    // end
 
     wire [3:0] char = x_block[5:2];
     wire [4:0] color_hash = char + color_offset;
