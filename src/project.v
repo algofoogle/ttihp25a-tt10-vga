@@ -18,12 +18,19 @@ module tt_um_algofoogle_vga (
     input  wire       rst_n     // reset_n - low to reset
 );
 
+  localparam kClouds        = 64;
   localparam kGrassTop      = 384;
-  localparam kDirtTop       = kGrassTop + 16;
+  localparam kDarkGrassTop  = 390;
+  localparam kDirtShadow    = kGrassTop + 24;
+  localparam kDirtTop       = kDirtShadow + 6;
   localparam kPlayerWidth   = 32;
   localparam kPlayerHeight  = 32;
+  localparam kPlayerRadius1 = 16;
+  localparam kPlayerRadius2 = 13;
   localparam kRangeX        = 640 - kPlayerWidth;
   localparam kRangeY        = kGrassTop - kPlayerHeight;
+  localparam kSpeedX        = 9;
+  localparam kInitialVelY   = 21;
 
   wire reset = ~rst_n;
   wire video_timing_mode = ui_in[7];
@@ -71,22 +78,24 @@ module tt_um_algofoogle_vga (
     .o_visible(visible)
   );
 
-  wire `RGB sky     = 6'b01_10_11; // Light blue.
-  wire `RGB grass   = 6'b01_10_00; // Lively green.
-  wire `RGB dirt    = 6'b10_01_00; // Medium brown.
-  wire `RGB player  = 6'b10_00_00; // Red.
-
+  reg signed [7:0] ydelta;
+  reg ydir;
+  reg signed [11:0] pxm, pym;
   // Player position:
-  reg [9:0] px, py;
+  wire [9:0] px = pxm[11:2];//, py;
+  wire [9:0] py = pym[9:0];
   reg dx; // 0=left, 1=right
+
+  reg [10:0] product_comp;
+  reg product_comp_dir;
 
   // X direction control:
   always @(posedge clk) begin
     if (reset) begin
       dx <= 1;
-    end else if (px == kRangeX) begin
+    end else if (px >= kRangeX) begin
       dx <= 0; // Move left.
-    end else if (px == 0) begin
+    end else if (px <= 0) begin
       dx <= 1; // Move right.
     end
   end
@@ -94,47 +103,97 @@ module tt_um_algofoogle_vga (
   // X position control:
   always @(posedge clk) begin
     if (reset) begin
-      px <= 0;
+      pxm <= 0;
+      pym <= 0;
+      product_comp <= 9;
+      product_comp_dir <= 1;
+      ydelta <= kInitialVelY;
+      ydir <= 0;
+      pym <= 0;
     end else if (frame_end) begin
       // Update for next frame:
+
       if (dx) begin
-        px <= px + 1;
+        pxm <= pxm + kSpeedX;
       end else begin
-        px <= px - 1;
+        pxm <= pxm - kSpeedX;
       end
+
+      if (ydelta < 0 && pym[11:8]==0 && pym[7:0] <= {-ydelta}) begin
+        pym <= 0;//pym - {{4{ydelta[7]}}, ydelta};
+        ydelta <= 19 + {6'd0,px[1:0]}; // Makes the next bounce height look a little random.
+      end else begin
+        pym <= pym + {{4{ydelta[7]}}, ydelta};
+        ydelta <= ydelta - 1;
+      end
+
+      if (product_comp_dir) begin
+        if (product_comp >= 200) begin
+          product_comp_dir <= 0;
+        end else begin
+          product_comp <= product_comp + 10;
+        end
+      end else begin
+        if (product_comp < 20) begin
+          product_comp_dir <= 1;
+        end else begin
+          product_comp <= product_comp - 10;
+        end
+      end
+
     end
+    // end else if (pym < 0) begin
+    //   pym <= 0;
+    //   ydelta <= 20;
+    // end
   end
 
-  // Y position control:
-  always @(posedge clk) begin
-    if (reset) begin
-      py <= 0;
-    end
-  end
+  // // Y position control:
+  // always @(posedge clk) begin
+  //   if (reset) begin
+  //     py <= 0;
+  //   end
+  // end
+
+  localparam `RGB zenith        = 6'b00_01_11; // Light blue.
+  localparam `RGB sky           = 6'b01_10_11; // Bright blue.
+  localparam `RGB grass         = 6'b01_10_00; // Lively green.
+  localparam `RGB dark_grass1   = 6'b00_10_00; // Dark green.
+  localparam `RGB dark_grass2   = 6'b00_01_00; // Darker green.
+  localparam `RGB dirt_shadow   = 6'b01_00_00; // Dark brown.
+  localparam `RGB dirt          = 6'b10_01_00; // Medium brown.
+  localparam `RGB player_heart  = 6'b11_00_00; // Bright red.
+  localparam `RGB player_ring   = 6'b10_00_00; // Red.
 
 
-  // wire [19:0] product = h*h + v*v;
-
-
-  wire signed [9:0] pxo = h-kPlayerWidth/2-px;//h-px-kPlayerWidth/2;
+  wire signed [9:0] pxo = h-(kPlayerWidth/2)-px;
   wire signed [4:0] psubx = pxo[4:0];
-  wire signed [9:0] pyo = v-kPlayerHeight/2-py;//v-py-kPlayerHeight/2;
+  wire signed [9:0] pyo = v-(kPlayerHeight/2)+py-kGrassTop;
   wire signed [4:0] psuby = pyo[4:0];
   wire signed [10:0] product = psubx*psubx + psuby*psuby;
 
-  wire in_player =
+  wire in_player_box =
     (h >= px) && (h < px+kPlayerWidth) &&
-    (v >= kGrassTop-py-kPlayerHeight) && (v < kGrassTop-py)
-    && (product < (kPlayerWidth*kPlayerWidth)/4 );
+    (v >= kGrassTop-py-kPlayerHeight) && (v < kGrassTop-py);
 
-  wire in_grass = (v >= kGrassTop);
-  wire in_dirt = (v >= kDirtTop);
+  wire in_player_ring  = in_player_box && (product < (kPlayerRadius1*kPlayerRadius1-15) );
+  wire in_player_heart = in_player_box && (product < product_comp); //(kPlayerRadius2*kPlayerRadius2-15) );
+
+  wire in_grass       = (v >= kGrassTop);
+  wire in_dark_grass  = (v >= kDarkGrassTop);
+  wire in_dirt        = (v >= kDirtTop);
+  wire in_dirt_shadow = (v >= kDirtShadow);
+  wire in_clouds      = (v <  kClouds);
 
   wire `RGB rgb =
-    in_dirt   ? dirt :
-    in_grass  ? grass :
-    in_player ? player :
-                sky;
+    in_dirt         ? dirt :
+    in_dirt_shadow  ? dirt_shadow :
+    in_dark_grass   ? (((h[1:0]^v[1:0]) != v[3:2]) ? dark_grass1 : dark_grass2) :
+    in_grass        ? grass :
+    in_player_heart ? player_heart :
+    in_player_ring  ? player_ring :
+    in_clouds       ? ( ((h[1:0]^v[1:0]) == v[3:2] && (h[2]^v[2] || (v[5]==0)) || ((v[6:2]==0) && (h[0]^v[0]))) ? zenith : sky) :
+                      sky;
 
   assign {rr,gg,bb} = rgb;
 
