@@ -41,6 +41,10 @@ jobs:
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y imagemagick # ffmpeg
 
+      - name: Install Ubuntu-Mono font
+        shell: bash
+        run: sudo apt-get install -y mono-complete || true # Suppress errors; the font is not that important.
+
       - name: Convert output frames from PPMs to PNGs
         if: success() || failure() # Run this even if the step above fails.
         shell: bash

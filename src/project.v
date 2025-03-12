@@ -112,9 +112,20 @@ module tt_um_algofoogle_vga (
     end
   end
 
+
+  // wire [19:0] product = h*h + v*v;
+
+
+  wire signed [9:0] pxo = h-kPlayerWidth/2-px;//h-px-kPlayerWidth/2;
+  wire signed [3:0] psubx = pxo[3:0];
+  wire signed [9:0] pyo = v-kPlayerHeight/2-py;//v-py-kPlayerHeight/2;
+  wire signed [3:0] psuby = pyo[3:0];
+  wire signed [8:0] product = psubx*psubx + psuby*psuby;
+
   wire in_player =
     (h >= px) && (h < px+kPlayerWidth) &&
-    (v >= kGrassTop-py-kPlayerHeight) && (v < kGrassTop-py);
+    (v >= kGrassTop-py-kPlayerHeight) && (v < kGrassTop-py) &&
+    (product < 64);
 
   wire in_grass = (v >= kGrassTop);
   wire in_dirt = (v >= kDirtTop);
