@@ -25,7 +25,7 @@ module vga_clock #(
     reg [2:0] min_d;
     reg [3:0] hrs_u;
     reg [1:0] hrs_d;
-    reg [25:0] sec_counter;
+    reg [24:0] sec_counter; // Enough to hold CORE_CLOCK counts.
 
     wire adj_sec_pulse, adj_min_pulse, adj_hrs_pulse;
 
@@ -66,6 +66,7 @@ module vga_clock #(
             hrs_d <= 0;
             sec_counter <= 0;
             color_offset <= 0;
+            col_index_q <= 0;
         end else begin
             if(sec_u == 10) begin
                 sec_u <= 0;
@@ -160,10 +161,14 @@ module vga_clock #(
     assign rrggbb = activevideo && draw ? color : 6'b0;
     assign font_addr = digit_index + y_block;
     always @(posedge px_clk) begin
-        if(reset) 
+        if(reset) begin
             draw <= 0;
-        x_block_q <= x_block;
-        y_block_q <= y_block;
+            x_block_q <= 0;
+            y_block_q <= 0;
+        end else begin
+            x_block_q <= x_block;
+            y_block_q <= y_block;
+        end
         col_index_q <= col_index;
         if(x_block_q < FONT_W * NUM_CHARS && y_block_q < FONT_H)
             draw <= font_out[(FONT_W - 1) - col_index_q];
@@ -221,8 +226,8 @@ endmodule
 
 
 module digit #(
-    parameter DIGIT_INDEX_FILE  = "../src/digit_index.hex",
-    parameter COL_INDEX_FILE    = "../src/col_index.hex",
+    // parameter DIGIT_INDEX_FILE  = "../src/digit_index.hex",
+    // parameter COL_INDEX_FILE    = "../src/col_index.hex",
     parameter COLOR_INDEX_FILE  = "../src/color.hex",
     parameter FONT_W = 3,
     parameter FONT_H = 5,
@@ -240,24 +245,51 @@ module digit #(
 
     localparam COL_INDEX_W = $clog2(FONT_W); 
 
-    reg [5:0] digit_index_mem [0:11];
-    reg [COL_INDEX_W-1:0] col_index_mem [0:NUM_BLOCKS];
+    // reg [5:0] digit_index_mem [0:11];
+    // reg [COL_INDEX_W-1:0] col_index_mem [0:NUM_BLOCKS];
     reg [5:0] color_index_mem [0:7];
 
     initial begin
         /* verilator lint_off WIDTH */
-        if (DIGIT_INDEX_FILE) $readmemh(DIGIT_INDEX_FILE, digit_index_mem);
-        if (COL_INDEX_FILE) $readmemh(COL_INDEX_FILE, col_index_mem);
+        // if (DIGIT_INDEX_FILE) $readmemh(DIGIT_INDEX_FILE, digit_index_mem);
+        // if (COL_INDEX_FILE) $readmemh(COL_INDEX_FILE, col_index_mem);
         if (COLOR_INDEX_FILE) $readmemb(COLOR_INDEX_FILE, color_index_mem);
         /* verilator lint_on WIDTH */
     end
 
     wire [3:0] char = x_block[5:2];
+    wire [4:0] color_hash = char + color_offset;
     always @(posedge clk) begin
         /* verilator lint_off WIDTH */
-        digit_index <= digit_index_mem[number];
-        col_index <= col_index_mem[x_block < NUM_BLOCKS ? x_block : NUM_BLOCKS-1];
-        color <= color_index_mem[char + color_offset];
+        case (number) // This is number*5:
+            4'd0    : digit_index <= 6'h00;
+            4'd1    : digit_index <= 6'h05;
+            4'd2    : digit_index <= 6'h0a;
+            4'd3    : digit_index <= 6'h0f;
+            4'd4    : digit_index <= 6'h14;
+            4'd5    : digit_index <= 6'h19;
+            4'd6    : digit_index <= 6'h1e;
+            4'd7    : digit_index <= 6'h23;
+            4'd8    : digit_index <= 6'h28;
+            4'd9    : digit_index <= 6'h2d;
+            4'd10   : digit_index <= 6'h32;
+            4'd11   : digit_index <= 6'h37;
+            default : digit_index <= 0;
+        endcase
+        // digit_index <= digit_index_mem[number];
+        col_index <= x_block < NUM_BLOCKS ? x_block[1:0] : 3;
+        // col_index <= col_index_mem[x_block < NUM_BLOCKS ? x_block : NUM_BLOCKS-1];
+        case (color_hash[2:0])
+            3'd0    : color <= 6'b110000;
+            3'd1    : color <= 6'b111000;
+            3'd2    : color <= 6'b111100;
+            3'd3    : color <= 6'b001000;
+            3'd4    : color <= 6'b000011;
+            3'd5    : color <= 6'b100010;
+            3'd6    : color <= 6'b010010;
+            3'd7    : color <= 6'b100001;
+        endcase
+        // color <= color_index_mem[char + color_offset];
         /* verilator lint_on WIDTH */
     end
    
@@ -285,7 +317,7 @@ endmodule
 //-----------------------------------------------------------------------------
 module fontROM 
 #(
-    parameter FONT_FILE = "../src/font.list",
+    // parameter FONT_FILE = "../src/font.list",
     parameter addr_width = 6,
     parameter data_width = 4
 )
@@ -295,17 +327,80 @@ module fontROM
     output reg [data_width-1:0] dout
 );
 
-    reg [data_width-1:0] mem [(1 << addr_width)-1:0];
+    // reg [data_width-1:0] mem [(1 << addr_width)-1:0];
 
-    initial begin
-        /* verilator lint_off WIDTH */
-        if (FONT_FILE) $readmemb(FONT_FILE, mem);
-        /* verilator lint_on WIDTH */
-    end
+    // initial begin
+    //     /* verilator lint_off WIDTH */
+    //     if (FONT_FILE) $readmemb(FONT_FILE, mem);
+    //     /* verilator lint_on WIDTH */
+    // end
 
     always @(posedge clk)
         begin
-            dout <= mem[addr];
+            case (addr)
+                6'd0    : dout <= 4'b1110;
+                6'd1    : dout <= 4'b1010;
+                6'd2    : dout <= 4'b1010;
+                6'd3    : dout <= 4'b1010;
+                6'd4    : dout <= 4'b1110;
+                6'd5    : dout <= 4'b1100;
+                6'd6    : dout <= 4'b0100;
+                6'd7    : dout <= 4'b0100;
+                6'd8    : dout <= 4'b0100;
+                6'd9    : dout <= 4'b1110;
+                6'd10   : dout <= 4'b1110;
+                6'd11   : dout <= 4'b0010;
+                6'd12   : dout <= 4'b1110;
+                6'd13   : dout <= 4'b1000;
+                6'd14   : dout <= 4'b1110;
+                6'd15   : dout <= 4'b1110;
+                6'd16   : dout <= 4'b0010;
+                6'd17   : dout <= 4'b1110;
+                6'd18   : dout <= 4'b0010;
+                6'd19   : dout <= 4'b1110;
+                6'd20   : dout <= 4'b1010;
+                6'd21   : dout <= 4'b1010;
+                6'd22   : dout <= 4'b1110;
+                6'd23   : dout <= 4'b0010;
+                6'd24   : dout <= 4'b0010;
+                6'd25   : dout <= 4'b1110;
+                6'd26   : dout <= 4'b1000;
+                6'd27   : dout <= 4'b1110;
+                6'd28   : dout <= 4'b0010;
+                6'd29   : dout <= 4'b1110;
+                6'd30   : dout <= 4'b1000;
+                6'd31   : dout <= 4'b1000;
+                6'd32   : dout <= 4'b1110;
+                6'd33   : dout <= 4'b1010;
+                6'd34   : dout <= 4'b1110;
+                6'd35   : dout <= 4'b1110;
+                6'd36   : dout <= 4'b0010;
+                6'd37   : dout <= 4'b0100;
+                6'd38   : dout <= 4'b1000;
+                6'd39   : dout <= 4'b1000;
+                6'd40   : dout <= 4'b1110;
+                6'd41   : dout <= 4'b1010;
+                6'd42   : dout <= 4'b1110;
+                6'd43   : dout <= 4'b1010;
+                6'd44   : dout <= 4'b1110;
+                6'd45   : dout <= 4'b1110;
+                6'd46   : dout <= 4'b1010;
+                6'd47   : dout <= 4'b1110;
+                6'd48   : dout <= 4'b0010;
+                6'd49   : dout <= 4'b0010;
+                6'd50   : dout <= 4'b0000;
+                6'd51   : dout <= 4'b0100;
+                6'd52   : dout <= 4'b0000;
+                6'd53   : dout <= 4'b0100;
+                6'd54   : dout <= 4'b0000;
+                6'd55   : dout <= 4'b0000;
+                6'd56   : dout <= 4'b0000;
+                6'd57   : dout <= 4'b0000;
+                6'd58   : dout <= 4'b0000;
+                6'd59   : dout <= 4'b0000;
+                default : dout <= 4'b1110;
+            endcase
+            // dout <= mem[addr];
         end
 
 endmodule
