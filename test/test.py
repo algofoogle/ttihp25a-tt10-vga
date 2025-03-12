@@ -1,6 +1,9 @@
 # SPDX-FileCopyrightText: © 2025 Anton Maurovic
 # SPDX-License-Identifier: Apache-2.0
 
+# This is based on https://github.com/algofoogle/ttihp0p2-raybox-zero/blob/main/test/test.py,
+# with SPI stuff removed.
+
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, Timer, ClockCycles
@@ -11,7 +14,7 @@ from pathlib import Path
 
 HIGH_RES        = float(env.get('HIGH_RES')) if 'HIGH_RES' in env else None # If not None, scale H res by this, and step by CLOCK_PERIOD/HIGH_RES instead of unit clock cycles.
 CLOCK_PERIOD    = float(env.get('CLOCK_PERIOD') or 40.0) # Default 40.0 (period of clk oscillator input, in nanoseconds)
-FRAMES          =   int(env.get('FRAMES')       or   10) # Default 10 (total frames to render)
+FRAMES          =   int(env.get('FRAMES')       or    3) # Default 3 (total frames to render)
 # INC_PX          =   int(env.get('INC_PX')       or    1) # Default 1 (inc_px on)
 # INC_PY          =   int(env.get('INC_PY')       or    1) # Default 1 (inc_py on)
 # GEN_TEX         =   int(env.get('GEN_TEX')      or    0) # Default 0 (use tex ROM; no generated textures)
@@ -110,14 +113,19 @@ async def test_frames(dut):
                     g = 0
                     b = 255
                 else:
-                    rr = dut.rr.value
-                    gg = dut.gg.value
-                    bb = dut.bb.value
+                    rr = int(dut.rr.value)
+                    gg = int(dut.gg.value)
+                    bb = int(dut.bb.value)
+                    # Scale 2-bit colour to 8-bit colour,
+                    # e.g. expand 0b00000010 to 0b10101010:
+                    rr &= 0b11; rr = rr | (rr<<2) | (rr<<4) | (rr<<6)
+                    gg &= 0b11; gg = gg | (gg<<2) | (gg<<4) | (gg<<6)
+                    bb &= 0b11; bb = bb | (bb<<2) | (bb<<4) | (bb<<6)
                     hsyncb = 255 if dut.hsync.value.binstr=='x' else (0==dut.hsync.value)*0b110000
                     vsyncb = 128 if dut.vsync.value.binstr=='x' else (0==dut.vsync.value)*0b110000
-                    r = (rr << 6) | hsyncb
-                    g = (gg << 6) | vsyncb
-                    b = (bb << 6)
+                    r = rr | hsyncb
+                    g = gg | vsyncb
+                    b = bb
                 sample_count += 1
                 if 'x' in (dut.rgb.value.binstr + dut.hsync.value.binstr + dut.vsync.value.binstr):
                     x_count += 1

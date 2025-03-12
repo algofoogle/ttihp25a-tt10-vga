@@ -37,6 +37,47 @@ jobs:
           paths: "test/results.xml"
         if: always()
 
+      - name: Install ImageMagick
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y imagemagick # ffmpeg
+
+      - name: Convert output frames from PPMs to PNGs
+        if: success() || failure() # Run this even if the step above fails.
+        shell: bash
+        run: |
+          pwd
+          ls -al
+          cd test
+          mkdir frames_out/png
+          cd frames_out
+          ../animate.sh png && cd png && tar czf ../frames-rtl.tgz *.png
+
+      - name: Convert output frames from PPMs to animated GIF
+        if: success() || failure() # Run this even if the step above fails.
+        shell: bash
+        run: |
+          pwd
+          ls -al
+          cd test
+          cd frames_out
+          ../animate.sh frames-rtl.gif
+
+      - name: Store frame output files
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frames-rtl
+          path: |
+            test/frames_out/frames-rtl.tgz
+            test/frames_out/frames-rtl.gif
+
+      - name: Publish output files for Summary and GitHub Pages
+        if: success() || failure()
+        id: deployment
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: test/frames_out/
+
       - name: upload vcd
         if: success() || failure()
         uses: actions/upload-artifact@v4
@@ -45,3 +86,36 @@ jobs:
           path: |
             test/tb.vcd
             test/results.xml
+
+  frames_preview:
+    needs: test
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write      # to deploy to Pages
+      id-token: write   # to verify the deployment originates from an appropriate source
+    steps:
+      - name: Build/deploy GitHub Pages site, for hosting content/images
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Display preview in workflow summary
+        shell: bash
+        run: |
+          pwd
+          ls -al
+          find . -ls
+          URLBASE="${{ steps.deployment.outputs.page_url }}"
+          URLBASE=$(echo "$URLBASE" | sed -e 's/\/$//')
+          echo "URLBASE: $URLBASE"
+          cat << EOF >> $GITHUB_STEP_SUMMARY
+          # Animated frames preview
+
+          ## From RTL:
+          ![Animated GIF of RTL-tested frames]($URLBASE/frames-rtl.gif)
+
+          ## From GL:
+          ![Animated GIF of GL-tested frames]($URLBASE/frames-gl.gif)
+          EOF
