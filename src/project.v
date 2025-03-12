@@ -54,7 +54,7 @@ module tt_um_algofoogle_vga (
   assign uio_oe  = 8'b0001_1111; // Top 3 bidir pins are inputs, rest are outputs.
 
   // List all unused inputs to prevent warnings
-  wire _unused = &{ena, uio_in, 1'b0};
+  wire _unused = &{ena, ui_in[6:0], uio_in, 1'b0};
 
   vga_sync vga_sync(
     .clk      (clk),
