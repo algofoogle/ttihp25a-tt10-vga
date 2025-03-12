@@ -9,6 +9,8 @@ You can also include images in this folder and reference them in the markdown. E
 
 ## How it works
 
+![Matt Venn's Clock plus a bouncing ball](./bouncing-ball-clock.png)
+
 Typical Verilog design that generates VGA timing and RGB222 colour outputs compatible with the Tiny VGA PMOD.
 
 It produces a bouncing ball animation over the top of an adaptation of Matt Venn's VGA clock, from here: https://github.com/mattvenn/tt08-vga-clock
