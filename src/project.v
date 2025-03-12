@@ -32,6 +32,7 @@ module tt_um_algofoogle_vga (
   wire [1:0] rr,gg,bb;
   wire [9:0] h,v;
   wire hmax,vmax, hblank,vblank;
+  wire frame_end = hmax & vmax;
   wire visible; // Whether the display is in the visible region, or blanking region.
 
   // Tiny VGA PMOD wiring, with 'visible' used for blanking:
@@ -94,10 +95,13 @@ module tt_um_algofoogle_vga (
   always @(posedge clk) begin
     if (reset) begin
       px <= 0;
-    end else if (dx) begin
-      px <= px + 1;
-    end else begin
-      px <= px - 1;
+    end else if (frame_end) begin
+      // Update for next frame:
+      if (dx) begin
+        px <= px + 1;
+      end else begin
+        px <= px - 1;
+      end
     end
   end
 
