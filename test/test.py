@@ -43,7 +43,7 @@ def check_uio_out(dut):
 # This can represent hard-wired stuff:
 def set_default_start_state(dut):
     dut.ena.value = 1
-    dut.mode = 0 # Normal 640x480 60fps mode
+    dut.mode.value = 0 # Normal 640x480 60fps mode
 
 @cocotb.test()
 async def test_frames(dut):

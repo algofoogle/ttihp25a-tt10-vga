@@ -34,6 +34,9 @@ module tt_um_algofoogle_vga (
 
   wire reset = ~rst_n;
   wire video_timing_mode = ui_in[7];
+  wire clock_adj_hrs = ui_in[0];
+  wire clock_adj_min = ui_in[1];
+  wire clock_adj_sec = ui_in[2];
   wire hsync;
   wire vsync;
   wire [1:0] rr,gg,bb;
@@ -185,6 +188,22 @@ module tt_um_algofoogle_vga (
   wire in_dirt_shadow = (v >= kDirtShadow);
   wire in_clouds      = (v <  kClouds);
 
+  wire `RGB clock_rgb;
+
+  vga_clock matt_venn_vga_clock (
+    .clk      (clk),
+    .reset_n  (rst_n),
+    .adj_hrs  (clock_adj_hrs),
+    .adj_min  (clock_adj_min),
+    .adj_sec  (clock_adj_sec),
+    .x_px     (h),   // X position for actual pixel.
+    .y_px     (v),   // Y position for actual pixel.
+    .activevideo(visible),
+    .rrggbb   (clock_rgb)
+  );
+
+  wire in_clock       = clock_rgb != 0;
+
   wire `RGB rgb =
     in_dirt         ? dirt :
     in_dirt_shadow  ? dirt_shadow :
@@ -192,6 +211,7 @@ module tt_um_algofoogle_vga (
     in_grass        ? grass :
     in_player_heart ? player_heart :
     in_player_ring  ? player_ring :
+    in_clock        ? clock_rgb :
     in_clouds       ? ( ((h[1:0]^v[1:0]) == v[3:2] && (h[2]^v[2] || (v[5]==0)) || ((v[6:2]==0) && (h[0]^v[0]))) ? zenith : sky) :
                       sky;
 

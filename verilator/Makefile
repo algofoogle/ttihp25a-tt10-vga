@@ -17,8 +17,9 @@
 
 # Main Verilog sources for our design:
 MAIN_VSOURCES = \
-	../../src/vga_sync.v \
-	../../src/project.v
+	../src/vga_sync.v \
+	../src/mv_vga_clock.v \
+	../src/project.v
 
 # # Extra source specific to the simulation target:
 # SIM_VSOURCES = \
