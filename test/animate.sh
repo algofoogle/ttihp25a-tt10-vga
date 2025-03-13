@@ -23,8 +23,14 @@ function write_h264() {
 #NOTE: Call this from within the frames_out dir, like this:
 # ../animate.sh frames.gif
 function write_animated_gif() {
-    #NOTE: -delay 100 sets a 100*10ms (1s) delay between frames:
-    convert -delay 100 $FRAME_NAME_BASE-???.ppm +antialias -font Ubuntu-Mono -fill white -pointsize 18 -gravity South -annotate 0 '%f' "$1"
+    #NOTE: GIF delay is in 10ms increments, hence 20fps => 50ms delay => 100/20 = 5 units.
+    DELAY=$((100/"${FPS:-1}"))  # Default is 1 frame per second.
+    echo "GIF delay is $DELAY unit(s)"
+    convert \
+        -monitor \
+        -delay $DELAY $FRAME_NAME_BASE-???.ppm \
+        +antialias -font Ubuntu-Mono -fill white -pointsize 18 -gravity South -annotate 0 '%f' \
+        "$1"
 }
 
 function anton_default1() {
