@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Your Name
+ * Copyright (c) 2025 Anton Maurovic
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -31,6 +31,7 @@ module tt_um_algofoogle_vga (
   localparam kRangeY        = kGrassTop - kPlayerHeight;
   localparam kSpeedX        = 9;
   localparam kInitialVelY   = 21;
+  localparam kPulseFadeRate = 5;
 
   wire reset = ~rst_n;
   wire clock_adj_hrs        = ui_in[0];
@@ -97,15 +98,9 @@ module tt_um_algofoogle_vga (
 
   // X direction control:
   always @(posedge clk) begin
-    if (reset) begin
-      dx <= 1;
-    end else if (hit_right_edge) begin
-      // Bounce on the right edge.
-      dx <= 0; // Move left.
-    end else if (hit_left_edge) begin
-      // Bounce on the left edge.
-      dx <= 1; // Move right.
-    end
+    if (reset) dx <= 1;
+    else if (hit_right_edge) dx <= 0;
+    else if (hit_left_edge) dx <= 1;
   end
 
   wire ground_bounce = ydelta < 0 && pym[11:8]==0 && pym[7:0] <= {-ydelta};
@@ -117,16 +112,15 @@ module tt_um_algofoogle_vga (
     else if (frame_end)
       if (ground_bounce || hit_right_edge || hit_left_edge)
         // Pulse when we hit the ground or an edge:
-        product_comp <= 200;
-      else if (product_comp > 15)
-        product_comp <= product_comp - 10;
+        product_comp <= 220;
+      else if (product_comp >= kPulseFadeRate)
+        product_comp <= product_comp - kPulseFadeRate;
   end
 
   // X position control:
   always @(posedge clk) begin
     if (reset) begin
       pxm <= 0;
-      pym <= 0;
       ydelta <= kInitialVelY;
       ydir <= 0;
       pym <= 0;
@@ -135,11 +129,7 @@ module tt_um_algofoogle_vga (
       // Update for next frame:
       t <= t + 1;
 
-      if (dx) begin
-        pxm <= pxm + kSpeedX;
-      end else begin
-        pxm <= pxm - kSpeedX;
-      end
+      pxm <= dx ? pxm + kSpeedX : pxm - kSpeedX;
 
       if (ground_bounce) begin
         // Bounce on the ground.
@@ -161,7 +151,7 @@ module tt_um_algofoogle_vga (
   localparam `RGB dark_grass2   = 6'b00_01_00; // Darker green.
   localparam `RGB dirt_shadow   = 6'b01_00_00; // Dark brown.
   localparam `RGB dirt          = 6'b10_01_00; // Medium brown.
-  localparam `RGB player_heart  = 6'b11_00_00; // Bright red.
+  localparam `RGB player_heart  = 6'b11_01_00; // Bright red.
   localparam `RGB player_ring   = 6'b10_00_00; // Red.
   localparam `RGB shadow        = 6'b00_00_00; // Black.
   localparam `RGB sheen         = 6'b11_11_10; // Very light yellow.
@@ -194,6 +184,12 @@ module tt_um_algofoogle_vga (
 
   wire in_player_ring  = in_player_box && (product < (kPlayerRadius1*kPlayerRadius1-15) );
   wire in_player_heart = in_player_box && (product < product_comp); //(kPlayerRadius2*kPlayerRadius2-15) );
+  wire `RGB player_heart_color =
+    product_comp > 210  ? 6'b11_11_11 :
+    product_comp > 200  ? 6'b11_11_01 :
+    product_comp > 180  ? 6'b11_10_00 :
+    product_comp > 140  ? 6'b11_01_00 :
+                          6'b11_00_00;
 
   wire in_grass       = (v >= kGrassTop);
   wire in_dark_grass  = (v >= kDarkGrassTop);
@@ -261,27 +257,34 @@ module tt_um_algofoogle_vga (
   );
 
   wire [9:0] ht = h+{6'd0,t};
+  wire [9:0] htslow = h+{7'd0,t[3:1]};
 
   wire in_clock       = show_clock && (clock_rgb != 0);
   wire in_clock_shade = show_clock && (clock_shadow_rgb != 0);
   wire in_clock_sheen = in_clock & !in_clock_shade;
   wire frizz          = ((ht[1:0]^v[1:0]) != v[3:2]);
   wire frizz2         = ((ht[2:0]^v[2:0]) != v[3:1]);
+  wire frizz3         = ((htslow[1:0]^v[1:0]) != v[3:2]);
   wire haze           = h[0]^v[0];
   wire hazet          = ht[0]^v[0];
+  wire hazets         = htslow[0]^v[0];
+  // wire clouds_blend   = ( (!frizz) && (ht[2]^v[2] || (v[5]==0)) || ((v[6:2]==0) && hazet));
+  wire clouds_blend   = ( (!frizz3) && (htslow[2]^v[2] || (v[5]==0)) || ((v[6:2]==0) && hazets));
+  wire db1            = (((v-5)&10'b10000)==0);
+  wire dirt_blend     = ((hazet && !db1) || (hazet && (ht[2]^v[2]) && db1)) && (v<435);
 
   wire `RGB rgb =
     in_player_sheen ? white :
-    in_dirt         ? dirt :
+    in_dirt         ? (dirt_blend ? dirt_shadow : dirt ) :
     in_dirt_shadow  ? dirt_shadow :
     in_dark_grass   ? (frizz ? dark_grass1 : dark_grass2) :
     in_grass        ? (frizz2 ? grass : bright_grass) :
-    in_player_heart ? player_heart :
+    in_player_heart ? player_heart_color :
     in_player_ring  ? player_ring :
     in_clock_sheen  ? (haze ? clock_rgb : sheen) :
     in_clock        ? clock_rgb :
     in_clock_shade  ? shadow :
-    in_clouds       ? ( ( (!frizz) && (ht[2]^v[2] || (v[5]==0)) || ((v[6:2]==0) && hazet)) ? zenith : sky) :
+    in_clouds       ? ( clouds_blend ? zenith : sky) :
                       sky;
 
   assign {rr,gg,bb} = rgb;

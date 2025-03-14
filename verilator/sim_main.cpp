@@ -51,7 +51,7 @@ using namespace std;
 #define S2(s2) S1(s2)
 
 #include <SDL2/SDL.h>
-// #include <SDL2/SDL_image.h> // This will be used for loading "ROMs" that interface with the design: Map & Texture data.
+// #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
 
 // It would be nice if these could be retrieved directly from the Verilog (vga_sync.v).
@@ -740,6 +740,8 @@ void render_info_text(SDL_Renderer* renderer, TTF_Font *font) {
     if (b==3) s+= "'";
     uii <<= 1;
   }
+  s += " - frame ";
+  s += std::to_string(TB->frame_counter);
 
 #ifdef INSPECT_INTERNAL
   s += " pX,Y=("
@@ -762,6 +764,25 @@ void render_info_text(SDL_Renderer* renderer, TTF_Font *font) {
   else {
     printf("Cannot create text_texture\n");
   }
+}
+
+
+void save_frame(const char *filename, uint8_t *fb, int w, int h) {
+  FILE *f = fopen(filename, "w");
+  uint32_t c;
+  int r,g,b;
+  if (!f) return;
+  fprintf(f, "P3\n%d %d\n255\n", w, h);
+  for (int y=0; y<h; ++y) {
+    for (int x=0; x<w; ++x) {
+      c = ((uint32_t*)fb)[y*w+x];
+      r = (c & 0xFF0000) >> 16;
+      g = (c & 0x00FF00) >> 8;
+      b = (c & 0x0000FF);
+      fprintf(f, "%d %d %d\n", r, g, b);
+    }
+  }
+  fclose(f);
 }
 
 
@@ -1062,6 +1083,13 @@ int main(int argc, char **argv) {
 
     render_info_text(renderer, font);
     SDL_RenderPresent(renderer);
+
+    char *frame_base = getenv("FRAME_BASE");
+    if (gRefreshLimit == REFRESH_FRAME && frame_base && strlen(frame_base)>0) {
+      char framename[128];
+      snprintf(framename, sizeof(framename)-1, "%sframe-%04d.ppm", frame_base, TB->frame_counter);
+      save_frame(framename, framebuffer, WINDOW_WIDTH, WINDOW_HEIGHT);
+    }
   }
 
   SDL_DestroyRenderer(renderer);
