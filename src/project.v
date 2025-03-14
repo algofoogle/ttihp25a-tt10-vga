@@ -90,16 +90,36 @@ module tt_um_algofoogle_vga (
 
   reg [10:0] product_comp;
   reg product_comp_dir;
+  reg [3:0] t;
+
+  wire hit_right_edge = px >= kRangeX;
+  wire hit_left_edge = px <= 0;
 
   // X direction control:
   always @(posedge clk) begin
     if (reset) begin
       dx <= 1;
-    end else if (px >= kRangeX) begin
+    end else if (hit_right_edge) begin
+      // Bounce on the right edge.
       dx <= 0; // Move left.
-    end else if (px <= 0) begin
+    end else if (hit_left_edge) begin
+      // Bounce on the left edge.
       dx <= 1; // Move right.
     end
+  end
+
+  wire ground_bounce = ydelta < 0 && pym[11:8]==0 && pym[7:0] <= {-ydelta};
+
+  // Ball inner glow:
+  always @(posedge clk) begin
+    if (reset)
+      product_comp <= 10;
+    else if (frame_end)
+      if (ground_bounce || hit_right_edge || hit_left_edge)
+        // Pulse when we hit the ground or an edge:
+        product_comp <= 200;
+      else if (product_comp > 15)
+        product_comp <= product_comp - 10;
   end
 
   // X position control:
@@ -107,13 +127,13 @@ module tt_um_algofoogle_vga (
     if (reset) begin
       pxm <= 0;
       pym <= 0;
-      product_comp <= 9;
-      product_comp_dir <= 1;
       ydelta <= kInitialVelY;
       ydir <= 0;
       pym <= 0;
+      t <= 0;
     end else if (frame_end) begin
       // Update for next frame:
+      t <= t + 1;
 
       if (dx) begin
         pxm <= pxm + kSpeedX;
@@ -121,26 +141,13 @@ module tt_um_algofoogle_vga (
         pxm <= pxm - kSpeedX;
       end
 
-      if (ydelta < 0 && pym[11:8]==0 && pym[7:0] <= {-ydelta}) begin
-        pym <= 0;//pym - {{4{ydelta[7]}}, ydelta};
-        ydelta <= 17 + {5'd0,px[2:0]}; // Makes the next bounce height look a little random.
+      if (ground_bounce) begin
+        // Bounce on the ground.
+        pym <= 0;
+        ydelta <= 17 + {5'd0,px[2:0]}; // Makes the next bounce velocity (hence height) look a little random.
       end else begin
         pym <= pym + {{4{ydelta[7]}}, ydelta};
         ydelta <= ydelta - 1;
-      end
-
-      if (product_comp_dir) begin
-        if (product_comp >= 200) begin
-          product_comp_dir <= 0;
-        end else begin
-          product_comp <= product_comp + 10;
-        end
-      end else begin
-        if (product_comp < 20) begin
-          product_comp_dir <= 1;
-        end else begin
-          product_comp <= product_comp - 10;
-        end
       end
 
     end
@@ -157,6 +164,8 @@ module tt_um_algofoogle_vga (
   localparam `RGB player_heart  = 6'b11_00_00; // Bright red.
   localparam `RGB player_ring   = 6'b10_00_00; // Red.
   localparam `RGB shadow        = 6'b00_00_00; // Black.
+  localparam `RGB sheen         = 6'b11_11_10; // Very light yellow.
+  localparam `RGB white         = 6'b11_11_11; // White.
 
 
   wire signed [9:0] pxo = h-(kPlayerWidth/2)-px;
@@ -168,6 +177,20 @@ module tt_um_algofoogle_vga (
   wire in_player_box =
     (h >= px) && (h < px+kPlayerWidth) &&
     (v >= kGrassTop-py-kPlayerHeight) && (v < kGrassTop-py);
+  wire [9:0] hpx = h-px;
+  wire [9:0] vpy = v+py;
+  // wire in_player_sheen  = ((h-px) < 16) && ((kGrassTop-v-py-kPlayerHeight+16) < 16) && (hpx[3:1]==3'b101) && (vpy[3:1]==3'b101);//^py[3]^v[3]);
+  reg player_sheen_shape;
+  always @(*) begin
+    case ({hpx[1:0],vpy[1:0]})
+      4'd0:     player_sheen_shape = 0;
+      4'd3:     player_sheen_shape = 0;
+      4'd12:    player_sheen_shape = 0;
+      4'd15:    player_sheen_shape = 0;
+      default:  player_sheen_shape = 1;
+    endcase
+  end
+  wire in_player_sheen = ((h-px) < 16) && ((kGrassTop-v-py-kPlayerHeight+16) < 16) && (hpx[4:2]==3'b010) && (vpy[4:2]==3'b010) && player_sheen_shape;
 
   wire in_player_ring  = in_player_box && (product < (kPlayerRadius1*kPlayerRadius1-15) );
   wire in_player_heart = in_player_box && (product < product_comp); //(kPlayerRadius2*kPlayerRadius2-15) );
@@ -237,20 +260,28 @@ module tt_um_algofoogle_vga (
     .rrggbb       (clock_shadow_rgb)
   );
 
+  wire [9:0] ht = h+{6'd0,t};
+
   wire in_clock       = show_clock && (clock_rgb != 0);
   wire in_clock_shade = show_clock && (clock_shadow_rgb != 0);
-  wire frizz          = ((h[1:0]^v[1:0]) != v[3:2]);
+  wire in_clock_sheen = in_clock & !in_clock_shade;
+  wire frizz          = ((ht[1:0]^v[1:0]) != v[3:2]);
+  wire frizz2         = ((ht[2:0]^v[2:0]) != v[3:1]);
+  wire haze           = h[0]^v[0];
+  wire hazet          = ht[0]^v[0];
 
   wire `RGB rgb =
+    in_player_sheen ? white :
     in_dirt         ? dirt :
     in_dirt_shadow  ? dirt_shadow :
     in_dark_grass   ? (frizz ? dark_grass1 : dark_grass2) :
-    in_grass        ? (frizz ? grass : bright_grass) :
+    in_grass        ? (frizz2 ? grass : bright_grass) :
     in_player_heart ? player_heart :
     in_player_ring  ? player_ring :
+    in_clock_sheen  ? (haze ? clock_rgb : sheen) :
     in_clock        ? clock_rgb :
     in_clock_shade  ? shadow :
-    in_clouds       ? ( ( (!frizz) && (h[2]^v[2] || (v[5]==0)) || ((v[6:2]==0) && (h[0]^v[0]))) ? zenith : sky) :
+    in_clouds       ? ( ( (!frizz) && (ht[2]^v[2] || (v[5]==0)) || ((v[6:2]==0) && hazet)) ? zenith : sky) :
                       sky;
 
   assign {rr,gg,bb} = rgb;

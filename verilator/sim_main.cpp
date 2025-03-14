@@ -784,6 +784,13 @@ int main(int argc, char **argv) {
 #else
   #pragma message "Oh hi! USE_POWER_PINS is not in effect for this simulation build"
 #endif
+
+  char *tempstr = getenv("UI_IN");
+  if (tempstr) {
+    TB->m_core->ui_in = atoi(tempstr);
+    printf("UI_IN env var specified; setting ui_in initial state to 0x%02X\n", TB->m_core->ui_in);
+  }
+
   uint8_t *framebuffer = new uint8_t[FRAMEBUFFER_SIZE];
 
   //SMELL: This needs proper error handling!
